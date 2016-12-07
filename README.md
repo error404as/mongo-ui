@@ -1,6 +1,6 @@
 # mongo ui
 
-I assume that you've already installed [https://www.mongodb.com/download-center#enterprise](MongoDB) and put it to system PATH.
+I assume that you've already installed [MongoDB](https://www.mongodb.com/download-center#enterprise) and put it to system PATH.
 
 Run `npm install` to install dependencies.
 
