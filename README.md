@@ -8,7 +8,7 @@ To start local server: `npm start`
 
 Open `http://localhost:1111`
 
-**Mongod** should be running.
+**Mongod** should be running.<br>
 E.g. you may run `mongod --dbpath mydb` in the same directory, but make sure that you alreay created 'mydb' folder in this directory.
 
 `server.js` is working with DB named `local`. Please change it if required.
