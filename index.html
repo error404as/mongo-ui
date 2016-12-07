@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>UI node shell</title>
+<meta name="viewport" content="width=device-width, initial-scale=0.8, maximum-scale=1"/>
+<style>
+body, input, select {font: 13px/1.2 monospace;}
+#blocker {
+	display: none;
+	position: fixed; top: 0; left: 0; z-index: 100;
+	width: 100%; height: 100%;
+	background: rgba(0,0,0,0.4);
+	cursor: wait;
+}
+.output {
+	padding: 10px;
+	border: 1px solid #ccc;
+	background: #f0f0f0;
+	white-space: pre-wrap;
+	font-size: 12px;
+}
+h4 { margin: 0 0 5px; font-size: 16px; }
+button { margin: 0 5px 5px; cursor: pointer; }
+
+#collections { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; background: #f1f9ff; }
+#collections:empty { display: none; }
+.collection { overflow: hidden; }
+.collection form { float: left; margin-right: 20px;}
+
+.form {border: 1px dotted #ccc; padding: 10px; margin-bottom: 20px;}
+
+</style>
+</head>
+<body>
+
+<form action="" id="mongo-collections">
+	<button>refresh collections</button>
+</form>
+<div id="collections"></div>
+
+<form action="" id="mongo-insert" class="form">
+	<h4>Insert</h4>
+	Collection <select class="select-collection" name="s"></select> or <input type="text" name="sn" autocomplete="off" placeholder="set collection name?">
+	<br><br>
+	<input type="text" name="q" autocomplete="off" placeholder="{name: 'John', age: 13, books: ['Foo','Woo','Goo']}" style="width: 600px;">
+	<button>insert</button>
+</form>
+
+
+
+<h4>Output:</h4>
+<div id="output" class="output"></div>
+
+<div id="blocker"></div>
+
+<script>
+
+/*************  HANDLERS  **************/
+
+document.getElementById('mongo-insert').addEventListener('submit',function(e){
+	e.preventDefault();
+	var str = this.q.value;
+	var colName = this.sn.value.trim() || this.s.value;
+	if(!colName){
+		alert('where should I put it? I need a collection name');
+		return;
+	}
+	if(str){
+		try{
+			var data = eval('('+str+')');
+			if(typeof data !== 'object'){ throw new Error("Not on object literal"); }
+
+			mongoInsert( colName, JSON.stringify(data) );
+
+		} catch(e){
+			console.log(e);
+			alert('sorry, can\'t parse it\n                         is it an Object literal?');
+		}
+	} else {
+		alert('an Object literal I need, sir');
+	}
+	return false;
+});
+
+document.getElementById('mongo-collections').addEventListener('submit',function(e){
+	e.preventDefault();
+	mongoCollections();
+	return false;
+});
+
+document.querySelector('.select-collection').addEventListener('change', function(){
+	if(this.value){
+		document.getElementById('mongo-insert').querySelector('[name="sn"]').value = '';
+	}
+});
+
+document.getElementById('mongo-insert').querySelector('[name="sn"]').addEventListener('input', function(){
+	if(this.value){
+		document.querySelector('.select-collection').value = '';
+	}
+});
+
+function showCollection(e,el){
+	e.preventDefault();
+	
+	var colName = el.id.value;
+	var query = el.q.value;
+	if(query){
+		try{
+			var data = eval('('+query+')');
+			if(typeof data !== 'object'){ throw new Error("Not on object literal"); }
+
+			mongoShow( colName, JSON.stringify(data) );
+		} catch(e){
+			console.log(e);
+			alert('sorry, can\'t parse it\n                         is it an Object literal?');
+		}
+	} else {
+		mongoShow( colName, '{}' );
+	}
+	return false;
+}
+function dropCollection(e,el){
+	e.preventDefault();
+	mongoDrop(el.id.value)
+	return false;
+}
+
+
+/*************  RENDER  **************/
+
+var collections = [];
+function renderCollectionsUI(arr){
+	collections = arr;
+	document.querySelector('.select-collection').innerHTML = '<option></option>' + arr.map(function(itm){
+		return '<option>'+itm+'</option>';
+	}).join('');
+	document.getElementById('collections').innerHTML = arr.map(function(itm){
+		return '<div class="collection"><h4>'+itm+'</h4><form action="" onsubmit="showCollection(event, this)"><input type="hidden" name="id" value="'+itm+'" /><input name="q" autocomplete="off" type="text" placeholder="Options if required" /><button>Get items</button></form><form action="" onsubmit="dropCollection(event, this)"><input type="hidden" name="id" value="'+itm+'" /><button>Drop it!</button></form></div>';
+	}).join('');
+}
+function output(str){
+	try{
+		str = JSON.stringify( JSON.parse(str), '', 2 )
+	} catch(e){ }
+	document.getElementById('output').innerHTML = str;
+}
+
+
+/*************  REQUESTS  **************/
+
+function mongoCollections(){
+	req('GET', '/mongo-collections/', null, function(response){
+		renderCollectionsUI(JSON.parse(response));
+	});
+}
+function mongoInsert(col, data){
+	if(!col){ return; }
+	if(!data || data === '{}'){
+		alert('no data to insert? rly?')
+		return;
+	}
+
+	req('POST', '/mongo-insert/'+col, data, function(response){
+		output(response);
+		document.getElementById('mongo-insert').reset();
+		if(collections.indexOf(col) === -1){
+			mongoCollections();
+		}
+	});
+}
+
+function mongoShow(col, data){
+	req('POST', '/mongo-show/'+col, data, function(response){
+		output(response);
+	});
+}
+
+function mongoDrop(col){
+	var data = '{"name":"'+col+'"}';
+
+	req('POST', '/mongo-drop/', data, function(response){
+		output(response);
+		mongoCollections();
+	});
+}
+
+function req(type, url, data, callback){
+	var blocker = document.getElementById('blocker');
+	blocker.style.display = 'block';
+
+	var req = new XMLHttpRequest();
+	req.open(type, url, true);
+	req.setRequestHeader('Content-type', 'application/json; charset=utf-8');
+	req.send(data);
+	req.onreadystatechange = function(){
+	    if(req.readyState == 4) {
+	    	callback(req.responseText);
+	    	blocker.style.display = 'none';
+	    }
+	}
+}
+
+
+/*************  INIT  **************/
+
+document.addEventListener("DOMContentLoaded", function(){
+
+	mongoCollections();
+
+});
+
+</script>
+</body></html>
