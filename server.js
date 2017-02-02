@@ -9,7 +9,7 @@ app.use(bodyParser.json({limit: '3mB'}));
 app.use(bodyParser.urlencoded({ limit: '3mB', extended: true }));
 app.use(express.static(__dirname));
 
-var dbName = 'local';
+var dbName = 'fcamp';
 var mongoURL = 'mongodb://localhost:27017/'+dbName;
 
 app.get('/mongo-collections', function(req, res){
